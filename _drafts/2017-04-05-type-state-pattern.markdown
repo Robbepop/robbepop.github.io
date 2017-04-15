@@ -253,7 +253,54 @@ That's why I will not continue to focus on this naive approach to deal with this
 
 ## Generics to the rescue
 
+First let us define our states:
 
+```rust
+pub trait CpuState {}
+pub trait GpuState {}
+pub trait RamState {}
+```
+
+Then we need some atoms that we can set for those states:
+
+```rust
+#[derive(Debug, Copy, Clone)]
+pub struct Unset;
+#[derive(Debug, Copy, Clone)]
+pub struct Set;
+
+```
+
+And finally we need to connect those as possible state representations:
+
+```rust
+impl CpuState for Set {}
+impl GpuState for Set {}
+impl RamState for Set {}
+impl CpuState for Unset {}
+impl GpuState for Unset {}
+impl RamState for Unset {}
+```
+
+This enables us to provide a `ComputerBuilder` type that is generic over all of its states:
+
+```rust
+struct ComputerBuilder<
+	CPU: CpuState,
+	GPU: GpuState,
+	RAM: RamState >
+{
+	owner  : String,
+	cpu    : Option<CpuKind>,
+	gpu    : Option<GpuKind>,
+	rams   : Vec<usize>,
+	// *new*
+	phantom: PhantomData<(CPU, GPU, RAM)>
+}
+```
+
+Since `ComputerBuilder` is generic over our state types but doesn't use them
+as field variables we need to add this phantom marker over our generic tuple.
 
 ## Real Use-Case (Prophet)
 
