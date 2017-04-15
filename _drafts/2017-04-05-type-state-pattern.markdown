@@ -19,9 +19,11 @@ Take a look into the awesome rust [documentation](https://doc.rust-lang.org/stab
 In the following, I am assuming that the reader has a basic understanding of Rust, its type system and generics.
 
 
-## Background
+## Motivation
 
-The **type state pattern** can be used to statically model an entire interface at compile-time.
+The **type state pattern** can be used to substitute program behaviour that can be asserted during compile-time instead of code that models those assertions at run-time.
+
+### Example 1: Human
 
 Given the following example `Human`:
 
@@ -69,6 +71,146 @@ A partial example implementation via panics with some pre- and post-conditions f
 		assert!(self.is_hungry);  // post-condition #1
 		assert!(self.is_thirsty); // post-condition #2
 	}
+```
+
+Using the type-state-pattern we could model the entire behaviour of our class `Human` to meet all of those invariants at compile-time.
+This implies that we no longer would be in need of assertions and wouldn't need tests to check those.
+
+### Example 2: Builder
+
+The [builder pattern](https://en.wikipedia.org/wiki/Builder_pattern) is a commonly used design pattern.
+Its main purpose is to lead construction of complex objects in a way that is sane for developers and in a transparent way.
+
+A toy example is following:
+
+The computer data type itself:
+
+```rust
+struct Computer {
+	/// The owner's name
+	owner: String,
+
+	/// Every computer requires a CPU
+	cpu: CpuKind,
+
+	/// A computer may have a GPU
+	gpu: Option<GpuKind>,
+
+	/// Precomputed MegaHertz
+	mhz: usize,
+
+	/// The amount and capacity of the main memory
+	rams: Vec<usize>,
+
+	/// The computer's unique mac address
+	mac: MacAddress
+}
+```
+
+Some utility types:
+
+```rust
+struct MacAddress { ... }
+enum CpuKind { Intel, Amd, ... }
+enum GpuKind { Nvidia, Amd, IntelHD, ... }
+```
+
+And the builder type for the computer:
+
+```rust
+struct ComputerBuilder {
+	/// The owner's name
+	owner: String,
+
+	/// Every computer requires a CPU
+	cpu: Option<CpuKind>,
+
+	/// A computer may have a GPU
+	gpu: Option<GpuKind>,
+
+	/// The amount and capacity of the main memory
+	rams: Vec<usize>,
+}
+```
+
+Note that some invariants must be hold for this implementation:
+
+Every computer ...
+
+- stores the name of its owner. (INV 1)
+- has one and only one CPU. (INV 2)
+- may have a GPU. (INV 3)
+- has one or more RAMs, each with at least 1 capacity. (INV 4)
+
+It is easy to model those invariants at run-time with the following implementation:
+
+```rust
+impl ComputerBuilder {
+	/// This constructor allows us to assert that the owner is always set.
+	pub fn with_owner(owner_name: String) -> ComputerBuilder {
+		ComputerBuilder{
+			owner: owner_name,
+			cpu: None, // not set, yet !!
+			gpu: None,
+			rams: vec![] // no entries, yet !!
+		}
+	}
+
+	pub fn cpu(mut self, cpu: CpuKind) -> ComputerBuilder {
+		self.cpu = Some(cpu);
+		self
+	}
+
+	pub fn gpu(mut self, gpu: GpuKind) -> ComputerBuilder {
+		self.gpu = Some(gpu);
+		self
+	}
+
+	pub fn add_ram(mut self, ram: usize) -> ComputerBuilder {
+		self.rams.push(ram);
+		self
+	}
+
+	pub fn done(self) -> Computer {
+		// calculate other stuff, such as ...
+		//   - mac address
+		//   - mhz
+		// assert that invariants, such as having at least one RAM are met
+		Computer{ ... }
+	}
+}
+```
+
+### Common Questions:
+
+- What is our error handling strategy? `panic` vs `Result` ?
+- How to handle cases where we set an attribute, such as `builder.cpu(..)`, multiple times?
+- What happens if we forget setting `cpu` at all?
+- How do we handle the case of zero Rams?
+
+## Let the compiler handle these things! (A first attempt ...)
+
+First let us collect all possible states in which our `ComputerBuilder` may be.
+
+- CPU may be **set** or **unset**
+- GPU may be **set** or **unset**
+- **zero** or **more** RAMs have been added
+
+A state in which we may call `done` is a state where
+
+- CPU must be **set**
+- **more** than zero RAMs must have been added
+
+So to model this behaviour we need to introduce new type states.
+Naively this could be done via new named types:
+
+```rust
+struct ComputerBuilder_UnsetCPU_UnsetGPU_ZeroRam;
+struct ComputerBuilder_UnsetCPU_UnsetGPU_MoreRam;
+struct ComputerBuilder_UnsetCPU_SetGPU_ZeroRam;
+struct ComputerBuilder_UnsetCPU_SetGPU_MoreRam;
+struct ComputerBuilder_SetCPU_UnsetGPU_ZeroRam;
+// ... etc.
 ```
 
 ## Real Use-Case (Prophet)
