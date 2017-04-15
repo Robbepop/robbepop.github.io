@@ -205,13 +205,55 @@ So to model this behaviour we need to introduce new type states.
 Naively this could be done via new named types:
 
 ```rust
-struct ComputerBuilder_UnsetCPU_UnsetGPU_ZeroRam;
-struct ComputerBuilder_UnsetCPU_UnsetGPU_MoreRam;
-struct ComputerBuilder_UnsetCPU_SetGPU_ZeroRam;
-struct ComputerBuilder_UnsetCPU_SetGPU_MoreRam;
-struct ComputerBuilder_SetCPU_UnsetGPU_ZeroRam;
-// ... etc.
+struct ComputerBuilder_UnsetCPU_UnsetGPU_ZeroRam { ... }
+struct ComputerBuilder_UnsetCPU_UnsetGPU_MoreRam { ... }
+struct ComputerBuilder_UnsetCPU_SetGPU_ZeroRam { ... }
+struct ComputerBuilder_UnsetCPU_SetGPU_MoreRam { ... }
+struct ComputerBuilder_SetCPU_UnsetGPU_ZeroRam { ... }
+struct ComputerBuilder_SetCPU_UnsetGPU_MoreRam { ... }
+struct ComputerBuilder_SetCPU_SetGPU_ZeroRam { ... }
+struct ComputerBuilder_SetCPU_SetGPU_MoreRam { ... }
 ```
+
+The initial constructor could now look like this: (Look at the **returned type** !)
+
+```rust
+impl ComputeBuilder {
+	pub fn with_owner(owner_name: String) -> ComputerBuilder_UnsetCPU_UnsetGPU_ZeroRam {
+		ComputerBuilder_UnsetCPU_UnsetGPU_ZeroRam{
+			owner: owner_name,
+			cpu: None, // not set, yet !!
+			gpu: None,
+			rams: vec![] // no entries, yet !!
+		}
+	}
+}
+```
+
+With an example implementation of `fn cpu`:
+
+```rust
+impl ComputerBuilder_UnsetCPU_UnsetGPU_ZeroRam {
+	pub fn cpu(mut self, cpu: CpuKind) -> ComputerBuilder_SetCPU_UnsetGPU_ZeroRam {
+		self.cpu = Some(cpu);
+		self.into() // here we also need a well-defined transition
+		            // from ComputerBuilder_UnsetCPU_UnsetGPU_ZeroRam
+		            //   to ComputerBuilder_SetCPU_UnsetGPU_ZeroRam
+	}
+}
+```
+
+This approach is extremely flawed for the following downsides:
+
+- State space explodes exponentially and so we need many many additional types.
+- The need to define transitions from type-state to others requires tons of boilerplate code.
+- A lot of methods need to be defined for many types for all possible transitions.
+
+That's why I will not continue to focus on this naive approach to deal with this.
+
+## Generics to the rescue
+
+
 
 ## Real Use-Case (Prophet)
 
