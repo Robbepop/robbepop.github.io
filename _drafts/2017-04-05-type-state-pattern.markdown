@@ -321,6 +321,63 @@ impl UnsetComputerBuilder {
 }
 ```
 
+And here is the code example for setting the CPU:
+
+```rust
+impl<GPU, RAM> ComputerBuilder<Unset, GPU, RAM>
+	where
+		GPU: GpuState,
+		RAM: RamState,
+{
+	pub fn cpu(mut self, kind: CpuKind) -> ComputerBuilder<Set, GPU, RAM> {
+		self.cpu = Some(kind);
+		self.switch_state()
+	}
+}
+```
+
+With `self.switch_state()` we handle the type state transition from the initial `self` type of
+`ComputerBuilder<Unset, GPU, RAM>` to `ComputerBuilder<Set, GPU, RAM>` for any valid assignment of `GPU` and `RAM`.
+
+A possible generic implementation for `switch_state` is the following:
+
+```rust
+impl<CPU, GPU, RAM> ComputerBuilder<CPU, GPU, RAM>
+	where
+		CPU1: CpuState,
+		GPU1: GpuState,
+		RAM1: RamState,
+{
+	fn switch_state<
+		CPU2: CpuState,
+		GPU2: GpuState,
+		RAM2: RamState>
+	(self) -> ComputerBuilder<CPU2, GPU2, RAM2> {
+		ComputerBuilder{
+			owner  : self.owner,
+			cpu    : self.cpu,
+			gpu    : self.gpu,
+			rams   : self.rams
+			phantom: PhantomData
+		}
+	}
+}
+```
+
+This might look more complex than it really is:
+The only thing `switch_state` does is, that it defines a way to create a `ComputerBuilder<A, B, C>`
+from any `ComputerBuilder<X, Y, Z>`.
+
+Note that its functionality is even more generic than we need it to be for our example since it allows us
+to model all possible state transitions, not only from `Unset` to `Set` and doesn't even restrict to
+transitions where only one state changes per transition.
+
+Also note that, while I am not sure in praxis, in theory this transition shouldn't require any computation
+overhead. I can imagine that the compiler can optimize most copies and moves away; or maybe at least can
+do that with another implementation.
+
+
+
 ## Real Use-Case (Prophet)
 
 ## Conclusion
