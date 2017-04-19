@@ -285,10 +285,9 @@ impl RamState for Unset {}
 This enables us to provide a `ComputerBuilder` type that is generic over all of its states:
 
 ```rust
-struct ComputerBuilder<
-	CPU: CpuState,
-	GPU: GpuState,
-	RAM: RamState >
+struct ComputerBuilder<CPU: CpuState,
+                       GPU: GpuState,
+                       RAM: RamState>
 {
 	owner  : String,
 	cpu    : Option<CpuKind>,
@@ -300,7 +299,27 @@ struct ComputerBuilder<
 ```
 
 Since `ComputerBuilder` is generic over our state types but doesn't use them
-as field variables we need to add this phantom marker over our generic tuple.
+as field variables we need to add this phantom marker over our generic tuple
+of states `(CPU, GPU, RAM)`.
+
+Now, to initialize our `ComputerBuilder` we can do the following:
+
+```rust
+/// Just for convenience
+pub type UnsetComputerBuilder = ComputerBuilder<Unset, Unset, Unset>;
+
+impl UnsetComputerBuilder {
+	fn with_owner(owner: String) -> UnsetComputerBuilder {
+		ComputerBuilder {
+			owner  : owner,
+			cpu    : None,
+			gpu    : None,
+			rams   : vec![],
+			phantom: PhantomData
+		}
+	}
+}
+```
 
 ## Real Use-Case (Prophet)
 
