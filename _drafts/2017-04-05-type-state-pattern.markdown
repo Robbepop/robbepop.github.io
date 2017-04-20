@@ -325,9 +325,8 @@ And here is the code example for setting the CPU:
 
 ```rust
 impl<GPU, RAM> ComputerBuilder<Unset, GPU, RAM>
-	where
-		GPU: GpuState,
-		RAM: RamState,
+	where GPU: GpuState,
+	      RAM: RamState
 {
 	pub fn cpu(mut self, kind: CpuKind) -> ComputerBuilder<Set, GPU, RAM> {
 		self.cpu = Some(kind);
@@ -336,6 +335,10 @@ impl<GPU, RAM> ComputerBuilder<Unset, GPU, RAM>
 }
 ```
 
+This simply states that any `ComputerBuilder` that is in the `CpuState` of `Unset` and any other state
+has a method `cpu` to set the cpu but results in a `ComputerBuilder` that has the required `CpuState` to
+be set to `Set` afterwards which disables setting the CPU more than once! (Which is why we do this entire thing ...)
+
 With `self.switch_state()` we handle the type state transition from the initial `self` type of
 `ComputerBuilder<Unset, GPU, RAM>` to `ComputerBuilder<Set, GPU, RAM>` for any valid assignment of `GPU` and `RAM`.
 
@@ -343,16 +346,14 @@ A possible generic implementation for `switch_state` is the following:
 
 ```rust
 impl<CPU, GPU, RAM> ComputerBuilder<CPU, GPU, RAM>
-	where
-		CPU1: CpuState,
-		GPU1: GpuState,
-		RAM1: RamState,
+	where CPU1: CpuState,
+	      GPU1: GpuState,
+	      RAM1: RamState
 {
-	fn switch_state<
-		CPU2: CpuState,
-		GPU2: GpuState,
-		RAM2: RamState>
-	(self) -> ComputerBuilder<CPU2, GPU2, RAM2> {
+	fn switch_state<CPU2: CpuState,
+	                GPU2: GpuState,
+	                RAM2: RamState
+	               >(self) -> ComputerBuilder<CPU2, GPU2, RAM2> {
 		ComputerBuilder{
 			owner  : self.owner,
 			cpu    : self.cpu,
@@ -376,7 +377,102 @@ Also note that, while I am not sure in praxis, in theory this transition shouldn
 overhead. I can imagine that the compiler can optimize most copies and moves away; or maybe at least can
 do that with another implementation.
 
+By the use of Rust's powerful automatic type inference it is enough to state
+the correct return type in our state transition methods `cpu`, `gpu` and `add_ram` in order to make
+`switch_state` work out of the box.
 
+---
+
+The implementation for setting the GPU looks very similar to setting the CPU:
+
+```rust
+impl<CPU, RAM> ComputerBuilder<CPU, Unset, RAM>
+	where CPU: CpuState,
+	      RAM: RamState
+{
+	pub fn gpu(mut self, kind: GpuKind) -> ComputerBuilder<CPU, Set, RAM> {
+		self.gpu = Some(kind);
+		self.switch_state()
+	}
+}
+```
+
+For `add_ram` things work slightly different.
+Multiple additions of rams are allowed here, so the `impl` header does not restrict to those states.
+
+```rust
+impl<CPU, GPU, RAM> ComputerBuilder<CPU, GPU, RAM>
+	where CPU: CpuState,
+	      GPU: GpuState,
+	      RAM: RamState
+{
+	pub fn add_ram(mut self, ram: usize) -> ComputerBuilder<CPU, GPU, Set> {
+		self.gpu = Some(kind);
+		self.switch_state()
+	}
+}
+```
+
+However, we still need to set the `RamState` to `Set` so that we can later check
+if more than zero rams have been added to this computer in the `done` method:
+
+```rust
+impl<GPU> ComputerBuilder<Set, GPU, Set>
+	where GPU: GpuState
+{
+	pub fn done(self) -> Computer {
+		// calculate other stuff, such as ...
+		//   - mac address
+		//   - mhz
+		Computer{ ... }
+	}
+}
+```
+
+As usual through the generic bounds restrictions we allow the `done` method only for
+`ComputerBuilder`'s that have their `CpuState` and their `RamState` set to `Set` and we
+do not care for the `GpuState` since it is optional.
+The rest is the same as with the runtime-based version of the code.
+
+**WE ARE DONE!**
+
+### Usage
+
+How will this new `ComputerBuilder` behave, now?
+
+```rust
+// imagine our ComputerBuilder code here!
+
+fn main() {
+	// EXAMPLE 1
+	let a = ComputerBuilder::with_owner("Herobird")
+		.cpu(CpuKind::Amd)     // ok
+		.gpu(GpuKind::IntelHD) // ok
+		.add_ram(32)           // ok
+		.add_ram(16)           // ok
+		.cpu(CpuKind::Intel)   // compile-time error! CpuState is Set already
+		.gpu(GpuKind::Amd)     // compile-time error! GpuState is Set already
+		.add_ram(8)            // ok
+		.add_ram(0)            // runtime-error: at least should be ...
+		.done()                // ok
+
+	// EXAMPLE 2
+	let b = ComputerBuilder::with_owner("Robbepop")
+		.add_ram(64) // ok
+		.add_ram(64) // ok
+		.done()      // compile-error: CpuState has not been set!
+
+	// EXAMPLE 3
+	let c = ComputerBuilder::with_owner("foo")
+		.gpu(GpuKind::Amd) // ok
+		.cpu(CpuKind::Amd) // ok
+		.done()            // compile-error: RamState is Unset
+}
+```
+
+This lead example with `ComputerBuilder` enhancing the well-known builder pattern by
+statically invalidating invalid program states demonstrates only the tip of the iceberg
+of what might be possible with the broader approach and usage of the type state pattern.
 
 ## Real Use-Case (Prophet)
 
